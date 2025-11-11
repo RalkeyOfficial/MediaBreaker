@@ -7,24 +7,26 @@ import requests
 import m3u8
 from pathlib import Path
 from Crypto.Cipher import AES
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock, local
 from lib.playlist_parser import get_browser_headers
 from lib.url_utils import build_absolute_url, get_base_url
 
 
-def fetch_encryption_key(key_uri: str, headers: dict) -> bytes:
+def fetch_encryption_key(key_uri: str, session: requests.Session) -> bytes:
     """
     Download encryption key from URI.
     Return key as bytes.
     """
     try:
-        response = requests.get(key_uri, headers=headers, timeout=30)
+        response = session.get(key_uri, timeout=15)
         response.raise_for_status()
         return response.content
     except Exception as e:
         raise RuntimeError(f"Failed to fetch encryption key from {key_uri}: {e}")
 
 
-def download_segment(segment_url: str, headers: dict, max_retries: int = 3) -> bytes:
+def download_segment(segment_url: str, session: requests.Session, max_retries: int = 3) -> bytes:
     """
     Download a single segment from URL.
     Handle HTTP errors and retries.
@@ -32,7 +34,7 @@ def download_segment(segment_url: str, headers: dict, max_retries: int = 3) -> b
     """
     for attempt in range(max_retries):
         try:
-            response = requests.get(segment_url, headers=headers, timeout=30)
+            response = session.get(segment_url, timeout=15)
             response.raise_for_status()
             return response.content
         except requests.RequestException as e:
@@ -81,9 +83,68 @@ def decrypt_segment(segment_data: bytes, key: bytes, iv: bytes = None) -> bytes:
         raise RuntimeError(f"Decryption failed: {e}")
 
 
+# Thread-local storage for sessions (one session per worker thread)
+_thread_local = local()
+
+def _get_thread_session(headers: dict) -> requests.Session:
+    """
+    Get or create a session for the current thread.
+    Reuses connections within the same thread.
+    """
+    if not hasattr(_thread_local, 'session'):
+        _thread_local.session = requests.Session()
+        # Set default headers on the session
+        _thread_local.session.headers.update(headers)
+    return _thread_local.session
+
+
+def _download_and_decrypt_segment(args: tuple) -> bytes:
+    """
+    Download and decrypt a single segment.
+    Used for parallel execution with ThreadPoolExecutor.
+    Takes a tuple of (segment, idx, base_url, headers, encryption_key, encryption_iv, use_sequence_iv, media_sequence).
+    Returns segment data as bytes.
+    """
+    segment, idx, base_url, headers, encryption_key, encryption_iv, use_sequence_iv, media_sequence = args
+    
+    # Get thread-local session for connection pooling
+    session = _get_thread_session(headers)
+    
+    segment_url = segment.uri
+    
+    # Convert relative URL to absolute
+    if not segment_url.startswith('http'):
+        segment_url = build_absolute_url(base_url, segment_url)
+    
+    # Download segment
+    segment_data = download_segment(segment_url, session)
+    
+    # Decrypt if encryption is present
+    if encryption_key:
+        # Check if this segment has its own IV
+        segment_iv = encryption_iv
+        
+        # Check segment-specific IV first
+        if segment.key and segment.key.iv:
+            iv_str = segment.key.iv
+            if iv_str.startswith('0x') or iv_str.startswith('0X'):
+                segment_iv = bytes.fromhex(iv_str[2:])
+            else:
+                segment_iv = bytes.fromhex(iv_str)
+        elif use_sequence_iv:
+            # If no IV specified, use segment sequence number as IV
+            # IV is the segment sequence number as a 16-byte big-endian integer
+            sequence_number = media_sequence + idx - 1
+            segment_iv = sequence_number.to_bytes(16, byteorder='big')
+        
+        segment_data = decrypt_segment(segment_data, encryption_key, segment_iv)
+    
+    return segment_data
+
+
 def download_all_segments(playlist: m3u8.Playlist, base_url: str, headers: dict, encryption_key: bytes = None, encryption_iv: bytes = None, use_sequence_iv: bool = False) -> list[bytes]:
     """
-    Download all segments from playlist.
+    Download all segments from playlist in parallel.
     Handle relative URLs (convert to absolute).
     Return list of segment byte data.
     Include progress reporting.
@@ -91,52 +152,53 @@ def download_all_segments(playlist: m3u8.Playlist, base_url: str, headers: dict,
     if not playlist.segments:
         raise ValueError("Playlist has no segments")
     
-    segments_data = []
     total_segments = len(playlist.segments)
     media_sequence = playlist.media_sequence or 0
     
-    print(f"Downloading {total_segments} segments...")
+    print(f"Downloading {total_segments} segments in parallel...")
     
-    for idx, segment in enumerate(playlist.segments, 1):
-        segment_url = segment.uri
+    # Prepare arguments for each segment
+    segment_args = [
+        (segment, idx, base_url, headers, encryption_key, encryption_iv, use_sequence_iv, media_sequence)
+        for idx, segment in enumerate(playlist.segments, 1)
+    ]
+    
+    # Download segments in parallel using ThreadPoolExecutor
+    # Use submit + as_completed for progress reporting, then reassemble in order
+    try:
+        completed_count = 0
+        completed_lock = Lock()
+        results = {}
         
-        # Convert relative URL to absolute
-        if not segment_url.startswith('http'):
-            segment_url = build_absolute_url(base_url, segment_url)
+        with ThreadPoolExecutor(max_workers=25) as executor:
+            # Submit all tasks with their indices
+            future_to_idx = {
+                executor.submit(_download_and_decrypt_segment, args): idx
+                for idx, args in enumerate(segment_args)
+            }
+            
+            # Process completions as they happen for progress reporting
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    segment_data = future.result()
+                    results[idx] = segment_data
+                    
+                    # Thread-safe progress reporting
+                    with completed_lock:
+                        completed_count += 1
+                        if completed_count % 10 == 0 or completed_count == total_segments:
+                            print(f"  Progress: {completed_count}/{total_segments} segments ({completed_count * 100 // total_segments}%)")
+                except Exception as e:
+                    print(f"ERROR: Failed to download segment {idx + 1}: {e}")
+                    raise
         
-        # Download segment
-        try:
-            segment_data = download_segment(segment_url, headers)
-            
-            # Decrypt if encryption is present
-            if encryption_key:
-                # Check if this segment has its own IV
-                segment_iv = encryption_iv
-                
-                # Check segment-specific IV first
-                if segment.key and segment.key.iv:
-                    iv_str = segment.key.iv
-                    if iv_str.startswith('0x') or iv_str.startswith('0X'):
-                        segment_iv = bytes.fromhex(iv_str[2:])
-                    else:
-                        segment_iv = bytes.fromhex(iv_str)
-                elif use_sequence_iv:
-                    # If no IV specified, use segment sequence number as IV
-                    # IV is the segment sequence number as a 16-byte big-endian integer
-                    sequence_number = media_sequence + idx - 1
-                    segment_iv = sequence_number.to_bytes(16, byteorder='big')
-                
-                segment_data = decrypt_segment(segment_data, encryption_key, segment_iv)
-            
-            segments_data.append(segment_data)
-            
-            # Progress reporting
-            if idx % 10 == 0 or idx == total_segments:
-                print(f"  Progress: {idx}/{total_segments} segments ({idx * 100 // total_segments}%)")
+        # Reassemble results in order
+        segments_data = [results[i] for i in range(len(segment_args))]
         
-        except Exception as e:
-            print(f"ERROR: Failed to download segment {idx}: {e}")
-            raise
+    except Exception as e:
+        print(f"ERROR: Failed to download segments: {e}")
+        raise
     
     return segments_data
 
@@ -206,7 +268,10 @@ def download_video(playlist: m3u8.Playlist, playlist_url: str, output_path: str,
                     key_uri = build_absolute_url(base_url, key_uri)
                 
                 print(f"Fetching encryption key from {key_uri}...")
-                encryption_key = fetch_encryption_key(key_uri, headers)
+                session = requests.Session()
+                session.headers.update(headers)
+                encryption_key = fetch_encryption_key(key_uri, session)
+                session.close()
                 
                 # Get IV if present
                 if first_segment.key.iv:
