@@ -4,6 +4,7 @@ Main entry point for M3U8 video downloader.
 """
 
 import sys
+import os
 import argparse
 from pathlib import Path
 
@@ -13,20 +14,6 @@ from lib import metadata_extractor
 from lib import url_utils
 from lib import generic_url_handler
 from lib import segment_downloader
-
-
-print("""
-███╗   ███╗███████╗██████╗ ██╗ █████╗ ██████╗ ██████╗ ███████╗ █████╗ ██╗  ██╗███████╗██████╗ 
-████╗ ████║██╔════╝██╔══██╗██║██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██║ ██╔╝██╔════╝██╔══██╗
-██╔████╔██║█████╗  ██║  ██║██║███████║██████╔╝██████╔╝█████╗  ███████║█████╔╝ █████╗  ██████╔╝
-██║╚██╔╝██║██╔══╝  ██║  ██║██║██╔══██║██╔══██╗██╔══██╗██╔══╝  ██╔══██║██╔═██╗ ██╔══╝  ██╔══██╗
-██║ ╚═╝ ██║███████╗██████╔╝██║██║  ██║██████╔╝██║  ██║███████╗██║  ██║██║  ██╗███████╗██║  ██║
-╚═╝     ╚═╝╚══════╝╚═════╝ ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-
-                               RalkeyOfficial / v1.0.0
-
-
-""")
 
 
 def sanitize_filename(filename: str) -> str:
@@ -47,7 +34,7 @@ def main():
     Main workflow for downloading m3u8 videos.
     """
     parser = argparse.ArgumentParser(
-        description='Download videos from m3u8 playlists',
+        description='Download videos from MediaDelivery.net',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -59,24 +46,45 @@ Examples:
         """
     )
     parser.add_argument('url', help='M3U8 playlist URL or generic video URL')
-    parser.add_argument('-o', '--output', help='Output filename (optional)')
-    parser.add_argument('-q', '--quality', action='store_true', 
-                       help='Show available quality options and exit')
-    
+    parser.add_argument('-f', '--filename', help='filename (optional, without extension)')
+    parser.add_argument('-o', '--out-dir', help='output directory (optional)')
+
     args = parser.parse_args()
-    
+
+    print("""
+███╗   ███╗███████╗██████╗ ██╗ █████╗ ██████╗ ██████╗ ███████╗ █████╗ ██╗  ██╗███████╗██████╗ 
+████╗ ████║██╔════╝██╔══██╗██║██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗██║ ██╔╝██╔════╝██╔══██╗
+██╔████╔██║█████╗  ██║  ██║██║███████║██████╔╝██████╔╝█████╗  ███████║█████╔╝ █████╗  ██████╔╝
+██║╚██╔╝██║██╔══╝  ██║  ██║██║██╔══██║██╔══██╗██╔══██╗██╔══╝  ██╔══██║██╔═██╗ ██╔══╝  ██╔══██╗
+██║ ╚═╝ ██║███████╗██████╔╝██║██║  ██║██████╔╝██║  ██║███████╗██║  ██║██║  ██╗███████╗██║  ██║
+╚═╝     ╚═╝╚══════╝╚═════╝ ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+
+                               RalkeyOfficial / v1.0.1
+
+
+""")
+
     url = args.url
     video_name = None
     playlist_url = url
-    
+    output_dir = None
+    file_extension = None
+
+    if args.out_dir:
+        output_dir = args.out_dir
+    else:
+        output_dir = os.getcwd()
+
     # Step 1: URL Type Detection
     print(f"Processing URL: {url}")
-    
+
     if generic_url_handler.is_generic_url(url):
         print("Detected generic URL, extracting m3u8 playlist...")
         result = generic_url_handler.resolve_generic_url(url)
         if not result:
-            print("ERROR: Failed to resolve generic URL. The website structure may have changed.")
+            print("ERROR: Failed to resolve generic URL. Please try again later.\n")
+            print("If this issue persists, the website structure may have changed.")
+            print("Please make an issue on the github repository.")
             sys.exit(1)
         
         playlist_url = result['playlist_url']
@@ -84,7 +92,8 @@ Examples:
         print(f"Extracted playlist URL: {playlist_url}")
         if video_name:
             print(f"Extracted video name: {video_name}")
-    
+
+
     # Step 2: Parse playlist
     print("\nFetching and parsing playlist...")
     try:
@@ -92,16 +101,45 @@ Examples:
     except Exception as e:
         print(f"ERROR: Failed to parse playlist: {e}")
         sys.exit(1)
-    
+
+
     # Step 3: Validate playlist
     if not playlist_parser.validate_playlist(playlist):
         print("ERROR: Invalid playlist")
         sys.exit(1)
+
+
+    # extract file extension
+    if (extension := metadata_extractor.extract_file_extension(playlist)):
+        print(f"Detected file extension: {extension}")
+        file_extension = extension
+    else:
+        print("No file extension detected, defaulting to mp4")
+        file_extension = 'mp4'
+
+    # Determine filename
+    if args.filename:
+        output_filename = sanitize_filename(args.filename) + f'.{file_extension}'
+    elif video_name:
+        output_filename = sanitize_filename(video_name) + f'.{file_extension}'
+    else:
+        uuid = url_utils.extract_uuid_from_url(playlist_url)
+        if uuid:
+            output_filename = f"{uuid}.{file_extension}"
+        else:
+            output_filename = f"output.{file_extension}"
     
+    # check if a file in the specified output directory with the same name already exists
+    if os.path.exists(os.path.join(output_dir, output_filename)):
+        print(f"ERROR: File \"{output_filename}\" already exists in \"{output_dir}\"")
+        sys.exit(1)
+
+
     # Step 4: Type check and quality selection
     playlist_type = playlist_parser.get_playlist_type(playlist)
     print(f"Playlist type: {playlist_type}")
-    
+
+
     if playlist_type == 'master':
         print("Master playlist detected, selecting highest quality stream...")
         media_playlist_url = quality_selector.get_highest_quality_stream(playlist)
@@ -124,7 +162,7 @@ Examples:
         except Exception as e:
             print(f"ERROR: Failed to parse media playlist: {e}")
             sys.exit(1)
-    
+
     # Step 5: Extract metadata
     print("\nExtracting metadata...")
     encryption_info = metadata_extractor.extract_encryption_info(playlist)
@@ -135,36 +173,26 @@ Examples:
     print(f"Total segments: {segment_info.get('total_segments', 0)}")
     if segment_info.get('duration'):
         print(f"Duration: {segment_info.get('duration'):.2f} seconds")
-    
-    # Step 6: Determine output filename
-    if args.output:
-        output_filename = args.output
-    elif video_name:
-        output_filename = sanitize_filename(video_name) + '.mp4'
-    else:
-        uuid = url_utils.extract_uuid_from_url(playlist_url)
-        if uuid:
-            output_filename = f"{uuid}.mp4"
-        else:
-            output_filename = "output.mp4"
-    
-    # Ensure .mp4 extension
-    if not output_filename.endswith('.mp4'):
-        output_filename += '.mp4'
+
     
     print(f"\nOutput filename: {output_filename}")
+
+    # combine output directory and filename
+    output_path = os.path.join(output_dir, output_filename)
 
     # Step 7: Download video
     print(f"\nStarting download...")
     print(f"Playlist URL: {playlist_url}")
+    print(f"Output directory: {output_dir}")
     print(f"Output: {output_filename}")
     print("-" * 80)
     
     try:
-        success = segment_downloader.download_video(playlist, playlist_url, output_filename, segment_info)
+        success = segment_downloader.download_video(playlist, playlist_url, output_path, segment_info)
         if success:
             print("-" * 80)
             print(f"✓ Download complete: {output_filename}")
+            print(f"✓ {output_path}")
         else:
             print("-" * 80)
             print("ERROR: Download failed")

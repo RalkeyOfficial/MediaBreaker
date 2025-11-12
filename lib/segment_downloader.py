@@ -216,10 +216,8 @@ def concatenate_segments(segments: list[bytes], output_path: str) -> bool:
         print(f"Concatenating {len(segments)} segments to {output_path}...")
         
         with open(output_file, 'wb') as f:
-            for idx, segment_data in enumerate(segments, 1):
+            for _, segment_data in enumerate(segments, 1):
                 f.write(segment_data)
-                if idx % 10 == 0 or idx == len(segments):
-                    print(f"  Progress: {idx}/{len(segments)} segments written")
         
         file_size = output_file.stat().st_size
         print(f"Output file size: {file_size / (1024 * 1024):.2f} MB")

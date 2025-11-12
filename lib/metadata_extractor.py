@@ -83,3 +83,40 @@ def extract_segment_info(playlist: m3u8.Playlist) -> dict:
         'playlist_type': playlist.playlist_type or 'VOD'
     }
 
+
+def extract_file_extension(playlist: m3u8.Playlist) -> str:
+    """
+    Extract file extension from playlist by looking at codec information.
+    Return: file extension
+    """
+
+    if not playlist.is_variant:
+        return None
+    
+    # Codec to extension mapping
+    # MP4 codecs
+    mp4_codecs = ['avc1', 'hvc1', 'hev1', 'mp4a', 'ac-3', 'eac-3', 'av01']
+    # WebM codecs
+    webm_codecs = ['vp8', 'vp9', 'opus', 'vorbis']
+    
+    # Check master playlist variants
+    if playlist.is_variant and playlist.playlists:
+        for stream_info in playlist.playlists:
+            info = stream_info.stream_info
+            if info.codecs:
+                codecs = [c.strip().lower() for c in info.codecs.split(',')]
+                
+                # Check for WebM codecs first (more specific)
+                for codec in codecs:
+                    codec_prefix = codec.split('.')[0] if '.' in codec else codec
+                    if any(codec_prefix.startswith(webm) for webm in webm_codecs):
+                        return 'webm'
+                
+                # Check for MP4 codecs
+                for codec in codecs:
+                    codec_prefix = codec.split('.')[0] if '.' in codec else codec
+                    if any(codec_prefix.startswith(mp4) for mp4 in mp4_codecs):
+                        return 'mp4'
+
+    # No known codecs found, return None
+    return None
