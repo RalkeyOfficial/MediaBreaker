@@ -86,7 +86,7 @@ pip install pyinstaller
 
 ### 2. Build the app
 ```bash
-pyinstaller --onefile .\downloader.py
+pyinstaller .\downloader.spec
 ```
 
 your .exe will be available in the `/dist` folder.
