@@ -10,3 +10,6 @@ __pycache__/
 *.pyzzz
 *.pywzzz
 *.mp4
+/build
+/dist
+*.spec
