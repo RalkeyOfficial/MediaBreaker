@@ -77,6 +77,20 @@ python downloader.py "https://.../playlist.m3u8" -o "C:\Videos"
 python downloader.py "https://iframe.mediadelivery.net/play/127378/[UUID]" -f "my_custom_video" -o "C:\Downloads\Videos"
 ```
 
+## Building it yourself (.exe)
+
+### 1. install pyinstaller
+```bash
+pip install pyinstaller
+```
+
+### 2. Build the app
+```bash
+pyinstaller --onefile .\downloader.py
+```
+
+your .exe will be available in the `/dist` folder.
+
 ## How It Works
 
 1. **URL Detection**: Determines if the URL is a direct M3U8 playlist or a generic URL
