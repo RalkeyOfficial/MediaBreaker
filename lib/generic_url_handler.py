@@ -69,8 +69,10 @@ def extract_playlist_url_from_json_ld(json_ld: dict) -> str:
     if not thumbnail_url:
         return None
     
-    # Replace thumbnail.jpg with playlist.m3u8
-    playlist_url = thumbnail_url.replace('thumbnail.jpg', 'playlist.m3u8')
+    # Replace thumbnail.jpg with playlist.m3u8 (The thumbnail is not always called "thumbnail.jpg")
+    playlist_url_parts = thumbnail_url.split('/')
+    playlist_url_parts[-1] = 'playlist.m3u8'
+    playlist_url = '/'.join(playlist_url_parts)
     return playlist_url
 
 
