@@ -228,7 +228,12 @@ def concatenate_segments(segments: list[bytes], output_path: str) -> bool:
         return False
 
 
-def download_video(playlist: m3u8.Playlist, playlist_url: str, output_path: str, metadata: dict = None) -> bool:
+def download_video(
+        playlist: m3u8.Playlist,
+        playlist_url: str,
+        output_path: str,
+        metadata: dict = None,
+        test_run: bool = False) -> bool:
     """
     Main function: orchestrate download and concatenation.
     Handle encryption keys.
@@ -303,7 +308,11 @@ def download_video(playlist: m3u8.Playlist, playlist_url: str, output_path: str,
         return False
     
     # Concatenate segments
-    success = concatenate_segments(segments_data, output_path)
+    if not test_run:
+        success = concatenate_segments(segments_data, output_path)
+    else:
+        print("[TEST RUN] SKIPPING FILE CREATION")
+        success = True
     
     return success
 

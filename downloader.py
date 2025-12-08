@@ -6,7 +6,6 @@ Main entry point for M3U8 video downloader.
 import sys
 import os
 import argparse
-from pathlib import Path
 
 from lib import playlist_parser
 from lib import quality_selector
@@ -50,6 +49,7 @@ Examples:
     parser.add_argument('url', help='M3U8 playlist URL or generic video URL')
     parser.add_argument('-f', '--filename', help='filename (optional, without extension)')
     parser.add_argument('-o', '--out-dir', help='output directory (optional)')
+    parser.add_argument('--test-run', help='Run the code without outputting a file', action="store_true")
 
     args = parser.parse_args()
 
@@ -71,6 +71,10 @@ Examples:
     playlist_url = url
     output_dir = None
     file_extension = None
+
+    # Print message showing that this is a test run
+    if args.test_run:
+        print("TEST RUN\n")
 
     if args.out_dir:
         output_dir = args.out_dir
@@ -112,7 +116,7 @@ Examples:
 
 
     # extract file extension
-    if (extension := metadata_extractor.extract_file_extension(playlist)):
+    if extension := metadata_extractor.extract_file_extension(playlist):
         print(f"Detected file extension: {extension}")
         file_extension = extension
     else:
@@ -190,7 +194,7 @@ Examples:
     print("-" * 80)
     
     try:
-        success = segment_downloader.download_video(playlist, playlist_url, output_path, segment_info)
+        success = segment_downloader.download_video(playlist, playlist_url, output_path, segment_info, test_run=args.test_run)
         if success:
             print("-" * 80)
             print(f"✓ Download complete: {output_filename}")
