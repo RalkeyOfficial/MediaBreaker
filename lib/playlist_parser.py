@@ -4,6 +4,7 @@ Parse and validate m3u8 playlists with zstd decompression support.
 
 import requests
 import m3u8
+from m3u8 import M3U8
 
 try:
     import zstandard as zstd
@@ -67,7 +68,7 @@ def decompress_zstd(raw_bytes: bytes) -> bytes:
             raise ValueError(f"Failed to decompress zstd content: {e}, stream failed: {e2}")
 
 
-def parse_playlist(url: str) -> m3u8.Playlist:
+def parse_playlist(url: str) -> M3U8:
     """
     Fetch playlist (handle zstd decompression) and parse with m3u8 library.
     """
@@ -92,7 +93,7 @@ def parse_playlist(url: str) -> m3u8.Playlist:
     return playlist
 
 
-def validate_playlist(playlist: m3u8.Playlist) -> bool:
+def validate_playlist(playlist: m3u8.M3U8) -> bool:
     """
     Check if playlist is valid.
     Verify required tags exist.
@@ -106,7 +107,7 @@ def validate_playlist(playlist: m3u8.Playlist) -> bool:
     return True
 
 
-def get_playlist_type(playlist: m3u8.Playlist) -> str:
+def get_playlist_type(playlist: m3u8.M3U8) -> str:
     """
     Return 'master' or 'media'.
     Determine playlist type.

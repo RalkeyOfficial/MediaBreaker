@@ -10,5 +10,7 @@ __pycache__/
 *.pyzzz
 *.pywzzz
 *.mp4
+/.venv
 /build
 /dist
+/database/downloads.db

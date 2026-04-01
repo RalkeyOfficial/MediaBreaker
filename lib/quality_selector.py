@@ -1,11 +1,12 @@
 """
 Select highest quality stream from master playlist.
 """
+from typing import NamedTuple
 
 import m3u8
 
 
-def get_highest_quality_stream(playlist: m3u8.Playlist) -> str:
+def get_highest_quality_stream(playlist: m3u8.M3U8) -> str | None:
     """
     Find stream with highest bandwidth.
     Return media playlist URL.
@@ -29,7 +30,13 @@ def get_highest_quality_stream(playlist: m3u8.Playlist) -> str:
     return None
 
 
-def get_stream_info(playlist: m3u8.Playlist) -> dict:
+class StreamInfo(NamedTuple):
+    bandwidth: int | None
+    resolution: str | None
+    codecs: str | None
+    uri: str | None
+
+def get_stream_info(playlist: m3u8.M3U8) -> list[StreamInfo] | None:
     """
     Extract bandwidth, resolution, codecs.
     Return metadata dict.
@@ -37,15 +44,17 @@ def get_stream_info(playlist: m3u8.Playlist) -> dict:
     if not playlist.is_variant:
         return None
     
-    streams = []
+    streams: list[StreamInfo] = []
     for stream_info in playlist.playlists:
         info = stream_info.stream_info
-        streams.append({
-            'bandwidth': info.bandwidth,
-            'resolution': f"{info.resolution[0]}x{info.resolution[1]}" if info.resolution else None,
-            'codecs': info.codecs,
-            'uri': stream_info.uri
-        })
+        streams.append(
+            StreamInfo(
+                bandwidth=info.bandwidth,
+                resolution=f"{info.resolution[0]}x{info.resolution[1]}" if info.resolution else None,
+                codecs=info.codecs,
+                uri=stream_info.uri
+            )
+        )
     
     return streams
 

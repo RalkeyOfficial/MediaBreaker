@@ -1,12 +1,11 @@
 """
 Handle generic URLs (non-m3u8) and extract playlist URLs from HTML.
 """
-
 import requests
 import json
 import re
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from urllib.parse import urlsplit
 
 
 def is_generic_url(url: str) -> bool:
@@ -39,7 +38,7 @@ def fetch_html(url: str) -> str:
         raise ValueError(f"Failed to fetch HTML: {e}")
 
 
-def extract_json_ld(html: str) -> dict:
+def extract_json_ld(html: str) -> dict | None:
     """
     Parse HTML and find <script type="application/ld+json"> tag.
     Extract and parse JSON-LD content.
@@ -59,24 +58,24 @@ def extract_json_ld(html: str) -> dict:
     return None
 
 
-def extract_playlist_url_from_json_ld(json_ld: dict) -> str:
+def extract_playlist_url_from_json_ld(json_ld: dict) -> str | None:
     """
     Extract thumbnailUrl from JSON-LD VideoObject.
-    Replace thumbnail.jpg with playlist.m3u8.
+    Replace thumbnail name with playlist.m3u8.
     Return constructed playlist URL.
     """
     thumbnail_url = json_ld.get('thumbnailUrl')
     if not thumbnail_url:
         return None
     
-    # Replace thumbnail.jpg with playlist.m3u8 (The thumbnail is not always called "thumbnail.jpg")
+    # Replace thumbnail name with playlist.m3u8 (The thumbnail is not always called "thumbnail.jpg")
     playlist_url_parts = thumbnail_url.split('/')
     playlist_url_parts[-1] = 'playlist.m3u8'
     playlist_url = '/'.join(playlist_url_parts)
     return playlist_url
 
 
-def extract_video_name_from_json_ld(json_ld: dict) -> str:
+def extract_video_name_from_json_ld(json_ld: dict) -> str | None:
     """
     Extract name field from JSON-LD VideoObject.
     Clean filename (remove .mp4 extension if present).
@@ -85,10 +84,15 @@ def extract_video_name_from_json_ld(json_ld: dict) -> str:
     name = json_ld.get('name')
     if not name:
         return None
-    
-    # Remove .mp4 extension if present
-    if name.endswith('.mp4'):
-        name = name[:-4]
+
+    # split on .
+    name_split = name.split('.')
+
+    # if items in split name array is more than 1, remove the last item (which is the prefix)
+    if len(name_split) >= 2:
+        del name_split[-1]
+
+    name = '.'.join(name_split)
     
     # Sanitize filename for filesystem
     name = re.sub(r'[<>:"/\\|?*]', '_', name)
@@ -97,7 +101,59 @@ def extract_video_name_from_json_ld(json_ld: dict) -> str:
     return name
 
 
-def resolve_generic_url(url: str) -> dict:
+def extract_account_id_from_generic_url(url: str) -> str | None:
+    """
+    Extract account id from a mediadelivery embed URL.
+
+    Examples:
+      https://iframe.mediadelivery.net/play/165597/uuid -> "165597"
+      http://iframe.mediadelivery.net/play/165597/uuid  -> "165597"
+      iframe.mediadelivery.net/play/165597/uuid         -> "165597"
+      /play/165597/uuid                                 -> "165597"
+    """
+    if not url:
+        return None
+
+    s = url.strip()
+
+    # urlsplit treats "iframe.mediadelivery.net/..." as a *path* unless there's a scheme.
+    # Prefixing '//' makes it parse as a netloc+path without committing to http/https.
+    parsed = urlsplit(s if "://" in s else ("//" + s if not s.startswith("/") else s))
+
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+
+    # If it's a full URL and not the expected host, bail (avoid extracting garbage).
+    if host and host != "iframe.mediadelivery.net":
+        return None
+
+    parts = [p for p in path.split("/") if p]  # remove empty segments from '///'
+    # Expect: ["play", "<account_id>", "<video_id>...]
+    if len(parts) >= 2 and parts[0] == "play":
+        account_id = parts[1]
+        return account_id if account_id.isdigit() else None
+
+    return None
+
+
+def extract_video_extension_from_json_ld(json_ld: dict) -> str | None:
+    """
+    Extract extension from the name field from JSON-LD VideoObject.
+    Return extension string or None if it does not exist.
+    """
+    name = json_ld.get('name')
+    if not name:
+        return None
+
+    # split on .
+    name_split = name.split('.')
+
+    if len(name_split) >= 2:
+        return name_split[-1]
+    return None
+
+
+def resolve_generic_url(url: str) -> dict | None:
     """
     Main function: resolve generic URL to m3u8 playlist URL.
     Returns: {playlist_url: str, video_name: str, metadata: dict} or None
@@ -113,14 +169,15 @@ def resolve_generic_url(url: str) -> dict:
         return None
     
     playlist_url = extract_playlist_url_from_json_ld(json_ld)
-    if not playlist_url:
-        return None
-    
     video_name = extract_video_name_from_json_ld(json_ld)
+    extension = extract_video_extension_from_json_ld(json_ld)
+    account_id = extract_account_id_from_generic_url(url)
     
     return {
         'playlist_url': playlist_url,
         'video_name': video_name,
+        'extension': extension,
+        'account_id': account_id,
         'metadata': json_ld
     }
 

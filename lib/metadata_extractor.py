@@ -3,9 +3,10 @@ Extract encryption, codec, and segment metadata from playlists.
 """
 
 import m3u8
+import sys
 
 
-def extract_encryption_info(playlist: m3u8.Playlist) -> dict:
+def extract_encryption_info(playlist: m3u8.M3U8) -> dict:
     """
     Extract #EXT-X-KEY information.
     Return: {method, uri, iv} or None
@@ -28,7 +29,7 @@ def extract_encryption_info(playlist: m3u8.Playlist) -> dict:
     return None
 
 
-def extract_codec_info(playlist: m3u8.Playlist) -> dict:
+def extract_codec_info(playlist: m3u8.M3U8) -> dict:
     """
     Extract codec information from master playlist.
     Return: {video_codec, audio_codec, resolution, bandwidth}
@@ -61,7 +62,7 @@ def extract_codec_info(playlist: m3u8.Playlist) -> dict:
     return codec_info
 
 
-def extract_segment_info(playlist: m3u8.Playlist) -> dict:
+def extract_segment_info(playlist: m3u8.M3U8) -> dict:
     """
     Extract segment count, duration, sequence.
     Return: {total_segments, duration, media_sequence, playlist_type}
@@ -84,7 +85,7 @@ def extract_segment_info(playlist: m3u8.Playlist) -> dict:
     }
 
 
-def extract_file_extension(playlist: m3u8.Playlist) -> str:
+def extract_file_extension(playlist: m3u8.M3U8) -> str | None:
     """
     Extract file extension from playlist by looking at codec information.
     Return: file extension

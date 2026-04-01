@@ -1,5 +1,17 @@
 ## Changelog:
 
+2.0.0:
+    - Added optional `--debug` flag for better logging
+    - Improved logging
+        - added more detailed logs for debugging
+        - hid logs useless to the end user behind debug
+    - simplified user installation
+        - automated creation of venv
+        - automated installation of project requirements into the venv
+        - added `--warmup` flag to just warm the app up without doing anything else
+    - added simple database to keep track of downloaded video's
+    - updated README.md to accurately reflect the current state of the tool
+    - improved building with automatic building script `build.py` (use with `python .\build.py`)
 1.0.2 - fixed bug where master playlist extraction can fail due to unexpected url format
 1.0.1:
     - added functionality to set custom output directory

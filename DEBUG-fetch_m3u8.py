@@ -2,6 +2,7 @@
 """
 Script to fetch and display m3u8 playlist content with browser-like headers.
 """
+import argparse
 
 import requests
 from urllib.parse import urljoin, urlparse
@@ -292,9 +293,17 @@ def main():
             sys.stdout.reconfigure(encoding='utf-8')
         except (AttributeError, ValueError):
             pass
-    
-    url = ""
-    
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('url')
+
+    args = parser.parse_args()
+
+    if not args.url:
+        sys.exit("No URL provided.")
+
+    url = args.url
+
     print(f"Fetching m3u8 playlist from: {url}")
     print()
     

@@ -15,37 +15,49 @@ A Python tool for downloading videos from MediaDelivery\.net. MediaBreaker can h
 
 ### Prerequisites
 
-- Python 3.7 or higher
-- pip (Python package manager)
+- Python 3.7 or higher (with pip)
 
 ### Steps
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/RalkeyOfficial/mediabreaker.git
-cd mediabreaker
+git clone https://github.com/RalkeyOfficial/MediaBreaker.git
+cd MediaBreaker
 ```
 
-2. Install dependencies:
+2. Run the warmup:
 ```bash
-pip install -r requirements.txt
+python downloader.py --warmup
 ```
 
 ## Arguments
 
-| Argument | Short | Description | Required |
-|----------|-------|-------------|----------|
-| `url` | - | M3U8 playlist URL or generic video URL | Yes |
-| `--filename` | `-f` | Output filename (without extension) | No |
-| `--out-dir` | `-o` | Output directory for downloaded video | No |
+| Argument | Short | Description                            | Required |
+|----------|-------|----------------------------------------|----------|
+| `url` | -     | generic video URL or M3U8 playlist URL | No       |
+| `--filename` | `-f`  | Output filename (without extension)    | No       |
+| `--out-dir` | `-o`  | Output directory for downloaded video  | No       |
+| `--test-run` | -     | Run the code without outputting a file | No       |
+| `--debug` | -     | Enable debug logging                   | No       |
+| `--warmup` | -     | Prepares the app for usage.            | No       |
 
 ### Notes
 
-- If `--filename` is not provided, the tool will attempt to extract the video name from metadata, or use a UUID-based filename
+- If `--filename` is not provided, the tool will attempt to extract the video name from metadata, or use a UUID-based filename.
+This is best used with a generic url, not a url ending in `.m3u8`. As it cannot extract a name from a url ending in `.m3u8`
 - If `--out-dir` is not provided, videos will be saved to the current working directory
-- The output file extension is automatically detected from the playlist metadata (defaults to `.mp4`)
+- The output file extension is automatically detected from the playlist metadata (defaults to `.mp4` incase of failure)
+- `--warmup` is not actually needed, as the app functions 100% fine without it.
+However, a warmup was added to make it easier for the user to follow this guide
+without being thrown into confusion.
 
 ## Usage Examples
+
+### Download from generic URL (MediaDelivery\.net) (Recommended)
+
+```bash
+python downloader.py "https://iframe.mediadelivery.net/play/479230/[URL]"
+```
 
 ### Download from direct M3U8 URL
 
@@ -53,22 +65,16 @@ pip install -r requirements.txt
 python downloader.py "https://.../playlist.m3u8"
 ```
 
-### Download from generic URL (MediaDelivery\.net)
-
-```bash
-python downloader.py "https://iframe.mediadelivery.net/play/479230/[URL]"
-```
-
 ### Specify custom filename
 
 ```bash
-python downloader.py "https://.../playlist.m3u8" -f "my_video"
+python downloader.py "[URL HERE]" -f "my_video"
 ```
 
 ### Specify output directory
 
 ```bash
-python downloader.py "https://.../playlist.m3u8" -o "C:\Videos"
+python downloader.py "[URL HERE]" -o "C:\Videos"
 ```
 
 ### Combine all options
@@ -77,7 +83,8 @@ python downloader.py "https://.../playlist.m3u8" -o "C:\Videos"
 python downloader.py "https://iframe.mediadelivery.net/play/127378/[UUID]" -f "my_custom_video" -o "C:\Downloads\Videos"
 ```
 
-## Building it yourself (.exe)
+## Building it yourself
+You can build the app into a portable .exe yourself
 
 ### 1. install pyinstaller
 ```bash
